@@ -1,0 +1,61 @@
+{
+  "batches": [
+    { "name": "Batch A", "code": "BATCH-A", "description": "Morning coding group", "status": "active" },
+    { "name": "Batch B", "code": "BATCH-B", "description": "Afternoon coding group", "status": "active" }
+  ],
+  "categories": [
+    { "name": "Attendance", "description": "Attendance points" },
+    { "name": "Class performance", "description": "Participation and lesson performance" },
+    { "name": "Homework", "description": "Homework and assignment completion" },
+    { "name": "Behavior", "description": "Positive or negative classroom behavior" },
+    { "name": "Project work", "description": "Project quality and teamwork" },
+    { "name": "Bonus", "description": "Extra credit and special recognition" }
+  ],
+  "students": [
+    {
+      "name": "Ariana Khan",
+      "studentId": "TA-1001",
+      "age": 15,
+      "school": "Dhaka Central School",
+      "batchCode": "BATCH-A",
+      "status": "active",
+      "notes": "Strong project participation"
+    },
+    {
+      "name": "Nabil Rahman",
+      "studentId": "TA-1002",
+      "age": 16,
+      "school": "Tech Scholars High",
+      "batchCode": "BATCH-A",
+      "status": "active",
+      "notes": "Consistent attendance"
+    },
+    {
+      "name": "Sadia Islam",
+      "studentId": "TA-1003",
+      "age": 14,
+      "school": "Future Learners School",
+      "batchCode": "BATCH-B",
+      "status": "active",
+      "notes": "Often helps teammates"
+    }
+  ],
+  "scoreLogs": [
+    {
+      "studentId": "TA-1001",
+      "studentName": "Ariana Khan",
+      "categoryName": "Attendance",
+      "points": 10,
+      "type": "add",
+      "reason": "Perfect attendance this week"
+    },
+    {
+      "studentId": "TA-1002",
+      "studentName": "Nabil Rahman",
+      "categoryName": "Homework",
+      "points": 8,
+      "type": "add",
+      "reason": "Submitted all assignments on time"
+    }
+  ]
+}

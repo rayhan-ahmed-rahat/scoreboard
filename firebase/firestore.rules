@@ -1,0 +1,101 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userExists() {
+      return isAuthenticated() && exists(userPath());
+    }
+
+    function userData() {
+      return get(userPath()).data;
+    }
+
+    function isAdmin() {
+      return userExists() && userData().role == "admin";
+    }
+
+    function isTeacher() {
+      return userExists() && (userData().role == "admin" || userData().role == "teacher");
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+
+      allow create: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == "teacher";
+
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.email == resource.data.email
+        )
+      );
+    }
+
+    match /students/{studentId} {
+      allow read: if isTeacher();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isTeacher() &&
+        request.resource.data.name == resource.data.name &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.age == resource.data.age &&
+        request.resource.data.school == resource.data.school &&
+        request.resource.data.batch == resource.data.batch &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.notes == resource.data.notes
+      );
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isTeacher();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /batches/{batchId} {
+      allow read: if isTeacher();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isTeacher();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /score_logs/{logId} {
+      allow read: if isTeacher();
+      allow create: if isTeacher()
+        && request.resource.data.teacherEmail == request.auth.token.email
+        && request.resource.data.type in ["add", "deduct"]
+        && request.resource.data.points is number
+        && request.resource.data.points > 0
+        && request.resource.data.studentRef is string
+        && request.resource.data.studentId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.categoryId is string
+        && request.resource.data.categoryName is string
+        && request.resource.data.reason is string
+        && request.resource.data.teacherName is string;
+      allow update, delete: if false;
+    }
+
+    match /public_leaderboard/{entryId} {
+      allow read: if true;
+      allow create, update, delete: if isTeacher();
+    }
+  }
+}
