@@ -1,11 +1,13 @@
 import {
   collection,
   doc,
+  getDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
   runTransaction,
+  setDoc,
   serverTimestamp,
   where,
 } from "firebase/firestore";
@@ -24,6 +26,28 @@ function mapLogSnapshot(snapshot) {
       signedPoints,
     };
   });
+}
+
+async function syncPublicLeaderboardEntry(studentId, studentData, totalScore) {
+  const batchSnapshot = studentData.batch
+    ? await getDoc(doc(db, COLLECTIONS.BATCHES, studentData.batch))
+    : null;
+  const batchName = batchSnapshot?.exists() ? batchSnapshot.data().name || "" : "";
+
+  await setDoc(
+    doc(db, COLLECTIONS.PUBLIC_LEADERBOARD, studentId),
+    {
+      studentRef: studentId,
+      studentId: studentData.studentId || "",
+      name: studentData.name || "",
+      batch: studentData.batch || "",
+      batchName,
+      totalScore,
+      status: studentData.status || "active",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function createScoreAdjustment({
@@ -52,6 +76,8 @@ export async function createScoreAdjustment({
 
   const studentRef = doc(db, COLLECTIONS.STUDENTS, student.id);
   const teacherProfile = buildTeacherProfile(teacher);
+  let syncedStudentData = null;
+  let syncedTotalScore = 0;
 
   await runTransaction(db, async (transaction) => {
     const studentSnapshot = await transaction.get(studentRef);
@@ -68,6 +94,9 @@ export async function createScoreAdjustment({
     if (nextTotalScore < 0) {
       throw new Error("This deduction would make the total score negative.");
     }
+
+    syncedStudentData = currentStudent;
+    syncedTotalScore = nextTotalScore;
 
     transaction.update(studentRef, {
       totalScore: nextTotalScore,
@@ -102,6 +131,8 @@ export async function createScoreAdjustment({
       createdAt: serverTimestamp(),
     });
   });
+
+  await syncPublicLeaderboardEntry(student.id, syncedStudentData, syncedTotalScore);
 }
 
 export async function createBulkScoreAdjustments({
@@ -124,9 +155,12 @@ export async function createBulkScoreAdjustments({
 
   const studentRef = doc(db, COLLECTIONS.STUDENTS, student.id);
   const teacherProfile = buildTeacherProfile(teacher);
+  let syncedStudentData = null;
+  let syncedTotalScore = 0;
 
   await runTransaction(db, async (transaction) => {
     const studentSnapshot = await transaction.get(studentRef);
+    const publicLeaderboardRef = doc(db, COLLECTIONS.PUBLIC_LEADERBOARD, student.id);
 
     if (!studentSnapshot.exists()) {
       throw new Error("Student not found.");
@@ -143,10 +177,26 @@ export async function createBulkScoreAdjustments({
       throw new Error("This score entry would make the total score negative.");
     }
 
+    syncedStudentData = currentStudent;
+    syncedTotalScore = nextTotalScore;
+
     transaction.update(studentRef, {
       totalScore: nextTotalScore,
       updatedAt: serverTimestamp(),
     });
+    transaction.set(
+      publicLeaderboardRef,
+      {
+        studentRef: student.id,
+        studentId: currentStudent.studentId,
+        name: currentStudent.name,
+        batch: currentStudent.batch || "",
+        totalScore: nextTotalScore,
+        status: currentStudent.status || "active",
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
 
     validAdjustments.forEach((entry) => {
       const numericPoints = Number(entry.points);
@@ -167,6 +217,8 @@ export async function createBulkScoreAdjustments({
       });
     });
   });
+
+  await syncPublicLeaderboardEntry(student.id, syncedStudentData, syncedTotalScore);
 }
 
 export function subscribeToScoreLogs(callback, options = {}, onError) {
