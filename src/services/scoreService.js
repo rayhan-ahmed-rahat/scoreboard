@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -254,6 +255,64 @@ export function subscribeToPublicLeaderboard(callback, onError) {
       ),
     onError
   );
+}
+
+export function subscribeToLeaderboardSnapshots(callback, onError) {
+  const snapshotsQuery = query(
+    collection(db, COLLECTIONS.LEADERBOARD_SNAPSHOTS),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(
+    snapshotsQuery,
+    (snapshot) =>
+      callback(
+        snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        }))
+      ),
+    onError
+  );
+}
+
+export async function saveLeaderboardSnapshot({
+  label,
+  snapshotDateKey,
+  batchFilter,
+  batchName,
+  rows,
+  teacher,
+}) {
+  if (!rows?.length) {
+    throw new Error("There is no leaderboard data to save.");
+  }
+
+  const teacherProfile = buildTeacherProfile(teacher);
+
+  const snapshotRows = rows.map((row) => ({
+    studentRef: row.studentRef || row.id || "",
+    studentId: row.studentId || "",
+    name: row.name || "",
+    batch: row.batch || "",
+    batchName: row.batchName || "",
+    totalScore: Number(row.totalScore || 0),
+    rank: Number(row.rank || 0),
+  }));
+
+  const snapshotRef = await addDoc(collection(db, COLLECTIONS.LEADERBOARD_SNAPSHOTS), {
+    label,
+    snapshotDateKey,
+    batchFilter,
+    batchName,
+    rowCount: snapshotRows.length,
+    rows: snapshotRows,
+    createdAt: serverTimestamp(),
+    teacherName: teacherProfile.name,
+    teacherEmail: teacherProfile.email,
+  });
+
+  return snapshotRef.id;
 }
 
 export function subscribeToStudentScoreLogs(studentRefId, callback, onError) {

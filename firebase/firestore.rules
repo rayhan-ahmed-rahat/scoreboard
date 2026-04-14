@@ -97,5 +97,10 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if isTeacher();
     }
+
+    match /leaderboard_snapshots/{snapshotId} {
+      allow read: if true;
+      allow create, update, delete: if isTeacher();
+    }
   }
 }
