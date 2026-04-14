@@ -4,7 +4,7 @@ const navigationItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/score-entry", label: "Score Entry" },
   { to: "/students", label: "Students" },
-  { to: "/leaderboard", label: "Leaderboard" },
+  { to: "/leaderboard/manage", label: "Leaderboard" },
   { to: "/reports", label: "Reports" },
   { to: "/settings", label: "Settings" },
 ];

@@ -26,6 +26,7 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="score-entry" element={<ScoreEntryPage />} />
+        <Route path="leaderboard/manage" element={<LeaderboardPage />} />
         <Route path="students/:studentId" element={<StudentProfilePage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />

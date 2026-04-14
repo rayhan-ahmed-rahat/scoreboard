@@ -6,6 +6,7 @@ import SectionCard from "../components/common/SectionCard";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
+  clearLeaderboardScores,
   saveLeaderboardSnapshot,
   subscribeToLeaderboardSnapshots,
   subscribeToPublicLeaderboard,
@@ -37,6 +38,7 @@ function LeaderboardPage({ publicView = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingSnapshot, setSavingSnapshot] = useState(false);
+  const [clearingScores, setClearingScores] = useState(false);
 
   useEffect(() => {
     let loadedStreams = 0;
@@ -185,6 +187,33 @@ function LeaderboardPage({ publicView = false }) {
     }
   };
 
+  const handleClearLeaderboard = async () => {
+    const confirmed = window.confirm(
+      "Clear all live scores for a fresh day start? This will reset current leaderboard totals to zero and add reset entries to the score history."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingScores(true);
+
+    try {
+      await clearLeaderboardScores({
+        teacher: {
+          ...user,
+          displayName: profile?.displayName || user?.displayName,
+        },
+      });
+      setViewFilter("present");
+      showToast("Live leaderboard scores cleared.");
+    } catch (nextError) {
+      showToast(nextError.message || "Failed to clear leaderboard.", "error");
+    } finally {
+      setClearingScores(false);
+    }
+  };
+
   if (loading) {
     return <LoadingState message="Loading leaderboard..." />;
   }
@@ -208,6 +237,16 @@ function LeaderboardPage({ publicView = false }) {
                   disabled={savingSnapshot}
                 >
                   {savingSnapshot ? "Saving..." : "Save day leaderboard"}
+                </button>
+              ) : null}
+              {canSaveSnapshot ? (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleClearLeaderboard}
+                  disabled={clearingScores}
+                >
+                  {clearingScores ? "Clearing..." : "Clear leaderboard"}
                 </button>
               ) : null}
               <button type="button" className="secondary-button" onClick={handleExport}>

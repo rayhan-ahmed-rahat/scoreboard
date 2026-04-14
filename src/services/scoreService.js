@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   limit,
   onSnapshot,
   orderBy,
@@ -11,6 +12,7 @@ import {
   setDoc,
   serverTimestamp,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { COLLECTIONS } from "../firebase/collections";
 import { db } from "../firebase/config";
@@ -313,6 +315,111 @@ export async function saveLeaderboardSnapshot({
   });
 
   return snapshotRef.id;
+}
+
+export async function clearLeaderboardScores({ teacher }) {
+  const teacherProfile = buildTeacherProfile(teacher);
+  const [studentSnapshot, logSnapshot] = await Promise.all([
+    getDocs(collection(db, COLLECTIONS.STUDENTS)),
+    getDocs(collection(db, COLLECTIONS.SCORE_LOGS)),
+  ]);
+
+  const categoryTotalsByStudent = new Map();
+
+  logSnapshot.forEach((document) => {
+    const data = document.data();
+    const signedPoints = data.type === "deduct" ? -Math.abs(data.points || 0) : Math.abs(data.points || 0);
+
+    if (!signedPoints || !data.studentRef || !data.categoryId) {
+      return;
+    }
+
+    const studentTotals = categoryTotalsByStudent.get(data.studentRef) || new Map();
+    const currentCategory = studentTotals.get(data.categoryId) || {
+      total: 0,
+      categoryName: data.categoryName || data.categoryId,
+    };
+
+    currentCategory.total += signedPoints;
+    currentCategory.categoryName = data.categoryName || currentCategory.categoryName;
+    studentTotals.set(data.categoryId, currentCategory);
+    categoryTotalsByStudent.set(data.studentRef, studentTotals);
+  });
+
+  let batch = writeBatch(db);
+  let operationCount = 0;
+  const commits = [];
+
+  const queueOperation = (callback) => {
+    if (operationCount >= 425) {
+      commits.push(batch.commit());
+      batch = writeBatch(db);
+      operationCount = 0;
+    }
+
+    callback(batch);
+    operationCount += 1;
+  };
+
+  studentSnapshot.forEach((studentDocument) => {
+    const student = studentDocument.data();
+    const studentId = studentDocument.id;
+    const studentCategoryTotals = categoryTotalsByStudent.get(studentId) || new Map();
+
+    studentCategoryTotals.forEach((categoryEntry, categoryId) => {
+      if (!categoryEntry.total) {
+        return;
+      }
+
+      const logRef = doc(collection(db, COLLECTIONS.SCORE_LOGS));
+      const resetType = categoryEntry.total > 0 ? "deduct" : "add";
+
+      queueOperation((currentBatch) =>
+        currentBatch.set(logRef, {
+          studentRef: studentId,
+          studentId: student.studentId || "",
+          studentName: student.name || "",
+          categoryId,
+          categoryName: categoryEntry.categoryName || categoryId,
+          points: Math.abs(categoryEntry.total),
+          type: resetType,
+          reason: "Leaderboard cleared for a new day.",
+          teacherName: teacherProfile.name,
+          teacherEmail: teacherProfile.email,
+          createdAt: serverTimestamp(),
+        })
+      );
+    });
+
+    queueOperation((currentBatch) =>
+      currentBatch.update(doc(db, COLLECTIONS.STUDENTS, studentId), {
+        totalScore: 0,
+        updatedAt: serverTimestamp(),
+      })
+    );
+
+    queueOperation((currentBatch) =>
+      currentBatch.set(
+        doc(db, COLLECTIONS.PUBLIC_LEADERBOARD, studentId),
+        {
+          studentRef: studentId,
+          studentId: student.studentId || "",
+          name: student.name || "",
+          batch: student.batch || "",
+          totalScore: 0,
+          status: student.status || "active",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    );
+  });
+
+  if (operationCount > 0) {
+    commits.push(batch.commit());
+  }
+
+  await Promise.all(commits);
 }
 
 export function subscribeToStudentScoreLogs(studentRefId, callback, onError) {
