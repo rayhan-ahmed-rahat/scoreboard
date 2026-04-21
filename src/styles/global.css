@@ -509,6 +509,126 @@ textarea:focus {
   border-radius: 20px;
 }
 
+.score-student-list {
+  display: grid;
+  gap: 12px;
+}
+
+.score-student-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  box-shadow: 0 8px 20px rgba(22, 37, 72, 0.05);
+}
+
+.score-student-card--active,
+.score-student-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--surface) 70%, var(--primary-soft));
+}
+
+.score-student-card__id {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.score-student-card__main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.score-student-card__main strong {
+  line-height: 1.2;
+}
+
+.score-student-card__main span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.score-student-card__score {
+  font-weight: 800;
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+
+.score-entry-modal {
+  width: min(560px, 100%);
+  max-height: min(88vh, 760px);
+  display: flex;
+  flex-direction: column;
+}
+
+.score-entry-modal__header h2 {
+  margin: 0 0 6px;
+}
+
+.score-entry-modal__header p {
+  margin: 0;
+}
+
+.score-entry-modal__content {
+  overflow-y: auto;
+  display: grid;
+  gap: 18px;
+}
+
+.score-entry-comment-field {
+  min-width: 0;
+}
+
+.score-entry-category-list {
+  display: grid;
+  gap: 14px;
+}
+
+.score-entry-category-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 84%, var(--surface-soft));
+}
+
+.score-entry-category-row__label {
+  min-width: 0;
+}
+
+.score-entry-category-row__label strong {
+  display: block;
+  line-height: 1.25;
+}
+
+.score-entry-category-row__controls {
+  display: grid;
+  gap: 10px;
+}
+
+.score-entry-category-row__input {
+  text-align: center;
+  font-weight: 700;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.score-entry-category-row__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .score-entry-table {
   width: 100%;
   border-collapse: collapse;
@@ -735,6 +855,22 @@ textarea:focus {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .score-student-card {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .score-student-card__score {
+    grid-column: 2;
+  }
+
+  .score-entry-modal {
+    width: min(100%, 420px);
+  }
+
+  .score-entry-category-row {
     grid-template-columns: 1fr;
   }
 }

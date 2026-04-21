@@ -13,6 +13,7 @@ import {
   createBulkScoreAdjustments,
   subscribeToAllScoreLogs,
 } from "../services/scoreService";
+import { formatPoints } from "../utils/formatters";
 
 function sortStudentsByNumericId(rows) {
   return [...rows].sort((first, second) => {
@@ -56,7 +57,8 @@ function ScoreEntryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [batchFilter, setBatchFilter] = useState("all");
   const [rowInputs, setRowInputs] = useState({});
-  const [busyCellKey, setBusyCellKey] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [busyCategoryId, setBusyCategoryId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -124,6 +126,27 @@ function ScoreEntryPage() {
     );
   }, [students, searchTerm, batchFilter]);
 
+  useEffect(() => {
+    if (!visibleStudents.length) {
+      setSelectedStudentId("");
+      return;
+    }
+
+    if (
+      selectedStudentId &&
+      visibleStudents.some((student) => student.id === selectedStudentId)
+    ) {
+      return;
+    }
+
+    setSelectedStudentId("");
+  }, [selectedStudentId, visibleStudents]);
+
+  const selectedStudent = useMemo(
+    () => visibleStudents.find((student) => student.id === selectedStudentId) || null,
+    [selectedStudentId, visibleStudents]
+  );
+
   const getDisplayedValue = (studentId, categoryId) => {
     const draftValue = rowInputs[studentId]?.[categoryId];
 
@@ -144,25 +167,31 @@ function ScoreEntryPage() {
     }));
   };
 
-  const handleCategoryBlur = async (student, category) => {
-    const rowState = rowInputs[student.id] || {};
-    const nextValue = Number(
-      rowState[category.id] ?? categoryScoreMap[student.id]?.[category.id] ?? 0
-    );
+  const commitCategoryChange = async (student, category, nextValue) => {
     const currentValue = Number(categoryScoreMap[student.id]?.[category.id] || 0);
-    const delta = nextValue - currentValue;
+    const parsedValue = Number(nextValue);
+
+    if (!Number.isFinite(parsedValue)) {
+      updateRowInput(student.id, category.id, String(currentValue));
+      showToast("Enter a valid number.", "error");
+      return;
+    }
+
+    const delta = parsedValue - currentValue;
+
+    updateRowInput(student.id, category.id, String(parsedValue));
 
     if (delta === 0) {
       return;
     }
 
-    setBusyCellKey(`${student.id}-${category.id}`);
+    setBusyCategoryId(category.id);
 
     try {
       await createBulkScoreAdjustments({
         student,
         adjustments: [{ category, points: delta }],
-        reason: rowState.comment || "",
+        reason: rowInputs[student.id]?.comment || "",
         teacher: {
           ...user,
           displayName: profile?.displayName || user?.displayName,
@@ -173,8 +202,23 @@ function ScoreEntryPage() {
       updateRowInput(student.id, category.id, String(currentValue));
       showToast(nextError.message, "error");
     } finally {
-      setBusyCellKey("");
+      setBusyCategoryId("");
     }
+  };
+
+  const handleStepChange = async (student, category, step) => {
+    const currentValue = Number(getDisplayedValue(student.id, category.id) || 0);
+    await commitCategoryChange(student, category, currentValue + step);
+  };
+
+  const handleInputBlur = async (student, category) => {
+    const nextValue = rowInputs[student.id]?.[category.id];
+
+    if (nextValue === undefined) {
+      return;
+    }
+
+    await commitCategoryChange(student, category, nextValue);
   };
 
   if (loading) {
@@ -189,9 +233,8 @@ function ScoreEntryPage() {
     <div className="page-grid">
       <SectionCard title="Score Entry">
         <p className="muted-copy">
-          Students are sorted by numeric student ID. Each category box shows the
-          current score for that category. Edit a number and click outside the box
-          to save automatically. Comment is optional.
+          Tap a student to open a vertical score editor. Students stay sorted by numeric
+          ID so it is easier to move down the list on mobile.
         </p>
 
         <div className="filters-row">
@@ -219,70 +262,123 @@ function ScoreEntryPage() {
           </label>
         </div>
 
-        <div className="score-entry-table-wrapper">
-          <table className="score-entry-table">
-            <colgroup>
-              <col style={{ width: "72px" }} />
-              <col style={{ width: "180px" }} />
-              {categories.map((category) => (
-                <col key={category.id} style={{ width: "78px" }} />
-              ))}
-              <col style={{ width: "130px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                {categories.map((category) => (
-                  <th key={category.id}>{category.name}</th>
-                ))}
-                <th>Comment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleStudents.map((student) => {
-                const rowState = rowInputs[student.id] || {};
+        <div className="score-student-list">
+          {visibleStudents.map((student) => {
+            const isActive = student.id === selectedStudentId;
+            const totalScore = Number(student.totalScore || 0);
 
-                return (
-                  <tr key={student.id}>
-                    <td className="score-entry-table__sticky">{student.studentId}</td>
-                    <td className="score-entry-table__sticky-second">
-                      <div className="score-entry-student">
-                        <strong>{student.name}</strong>
-                      </div>
-                    </td>
-                    {categories.map((category) => (
-                      <td key={category.id}>
-                        <input
-                          className="score-cell-input"
-                          type="number"
-                          value={getDisplayedValue(student.id, category.id)}
-                          onChange={(event) =>
-                            updateRowInput(student.id, category.id, event.target.value)
-                          }
-                          onBlur={() => handleCategoryBlur(student, category)}
-                          placeholder="0"
-                          disabled={busyCellKey === `${student.id}-${category.id}`}
-                        />
-                      </td>
-                    ))}
-                    <td>
-                      <input
-                        className="score-comment-input"
-                        value={rowState.comment || ""}
-                        onChange={(event) =>
-                          updateRowInput(student.id, "comment", event.target.value)
-                        }
-                        placeholder="Optional comment"
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            return (
+              <button
+                key={student.id}
+                type="button"
+                className={isActive ? "score-student-card score-student-card--active" : "score-student-card"}
+                onClick={() => setSelectedStudentId(student.id)}
+              >
+                <div className="score-student-card__id">ID {student.studentId}</div>
+                <div className="score-student-card__main">
+                  <strong>{student.name}</strong>
+                  <span>{student.batchName || student.batch || "No batch"}</span>
+                </div>
+                <div className="score-student-card__score">{formatPoints(totalScore)}</div>
+              </button>
+            );
+          })}
         </div>
       </SectionCard>
+
+      {selectedStudent ? (
+        <div
+          className="modal-backdrop"
+          onClick={() => setSelectedStudentId("")}
+          role="presentation"
+        >
+          <div
+            className="modal score-entry-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="score-entry-modal-title"
+          >
+            <div className="modal__header score-entry-modal__header">
+              <div>
+                <h2 id="score-entry-modal-title">{selectedStudent.name}</h2>
+                <p className="muted-copy">
+                  ID {selectedStudent.studentId} · Total {formatPoints(selectedStudent.totalScore || 0)}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setSelectedStudentId("")}
+                aria-label="Close score entry"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal__content score-entry-modal__content">
+              <label className="filter-field score-entry-comment-field">
+                <span>Comment</span>
+                <input
+                  value={rowInputs[selectedStudent.id]?.comment || ""}
+                  onChange={(event) =>
+                    updateRowInput(selectedStudent.id, "comment", event.target.value)
+                  }
+                  placeholder="Optional comment for the next change"
+                />
+              </label>
+
+              <div className="score-entry-category-list">
+                {categories.map((category) => {
+                  const inputValue = getDisplayedValue(selectedStudent.id, category.id);
+                  const isBusy = busyCategoryId === category.id;
+
+                  return (
+                    <div key={category.id} className="score-entry-category-row">
+                      <div className="score-entry-category-row__label">
+                        <strong>{category.name}</strong>
+                      </div>
+
+                      <div className="score-entry-category-row__controls">
+                        <input
+                          className="score-entry-category-row__input"
+                          type="number"
+                          value={inputValue}
+                          onChange={(event) =>
+                            updateRowInput(selectedStudent.id, category.id, event.target.value)
+                          }
+                          onBlur={() => handleInputBlur(selectedStudent, category)}
+                          disabled={isBusy}
+                        />
+                        <div className="score-entry-category-row__buttons">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => handleStepChange(selectedStudent, category, -1)}
+                            disabled={isBusy}
+                          >
+                            -1
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => handleStepChange(selectedStudent, category, 1)}
+                            disabled={isBusy}
+                          >
+                            +1
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
