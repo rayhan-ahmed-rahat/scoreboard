@@ -225,6 +225,14 @@ Firestore may prompt you to create composite indexes. A useful one for this app 
 ## Deploy to Vercel
 
 1. Push the project to GitHub.
+
+cd C:\Users\RAHAT\Desktop\Scoreboard
+
+git status
+git add .
+git commit -m "update leaderboard sync"
+git push
+
 2. Import it into [Vercel](https://vercel.com/).
 3. Add the same Firebase environment variables from your local `.env`.
 4. Deploy.

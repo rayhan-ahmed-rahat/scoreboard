@@ -7,6 +7,7 @@ export const COLLECTIONS = {
   PUBLIC_LEADERBOARD: "public_leaderboard",
   LEADERBOARD_SNAPSHOTS: "leaderboard_snapshots",
   SETTINGS: "settings",
+  EVALUATION_QUEUE: "evaluation_queue",
 };
 
 export const ROLES = {

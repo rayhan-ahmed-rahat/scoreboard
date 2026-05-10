@@ -67,7 +67,7 @@ service cloud.firestore {
     }
 
     match /batches/{batchId} {
-      allow read: if isTeacher();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -101,6 +101,17 @@ service cloud.firestore {
     match /leaderboard_snapshots/{snapshotId} {
       allow read: if true;
       allow create, update, delete: if isTeacher();
+    }
+
+    match /evaluation_queue/{entryId} {
+      allow read: if true;
+      allow create: if request.resource.data.status == "waiting"
+        && request.resource.data.studentRef is string
+        && request.resource.data.studentId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.reason is string;
+      allow update: if isTeacher();
+      allow delete: if isTeacher() || resource.data.status == "waiting";
     }
   }
 }
