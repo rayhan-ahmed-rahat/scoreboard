@@ -28,6 +28,16 @@ function StudentQueuePage() {
     [queue]
   );
 
+  const waitingQueue = useMemo(
+    () => activeQueue.filter((e) => e.status === "waiting"),
+    [activeQueue]
+  );
+
+  const waitingPositionMap = useMemo(
+    () => new Map(waitingQueue.map((e, i) => [e.id, i + 1])),
+    [waitingQueue]
+  );
+
   const myEntry = useMemo(
     () => activeQueue.find((entry) => entry.studentRef === studentSession?.id) || null,
     [activeQueue, studentSession]
@@ -35,9 +45,8 @@ function StudentQueuePage() {
 
   const myPosition = useMemo(() => {
     if (!myEntry || myEntry.status === "in_progress") return null;
-    const waitingQueue = activeQueue.filter((e) => e.status === "waiting");
-    return waitingQueue.findIndex((e) => e.id === myEntry.id) + 1;
-  }, [myEntry, activeQueue]);
+    return waitingPositionMap.get(myEntry.id) || null;
+  }, [myEntry, waitingPositionMap]);
 
   const handleJoin = async (event) => {
     event.preventDefault();
@@ -82,16 +91,6 @@ function StudentQueuePage() {
       </div>
     );
   }
-
-  const waitingQueue = useMemo(
-    () => activeQueue.filter((e) => e.status === "waiting"),
-    [activeQueue]
-  );
-
-  const waitingPositionMap = useMemo(
-    () => new Map(waitingQueue.map((e, i) => [e.id, i + 1])),
-    [waitingQueue]
-  );
 
   const waitingCount = waitingQueue.length;
 

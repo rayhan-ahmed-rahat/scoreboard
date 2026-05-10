@@ -1,9 +1,19 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import LoadingState from "../common/LoadingState";
 
 function StudentLayout() {
-  const { studentSession, logoutStudent } = useAuth();
+  const { studentSession, logoutStudent, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingState message="Loading..." />;
+  }
+
+  if (!studentSession) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
   const handleLogout = () => {
     logoutStudent();
@@ -42,8 +52,8 @@ function StudentLayout() {
 
         <div className="student-header__user">
           <div className="student-identity">
-            <strong>{studentSession?.name}</strong>
-            <span>{studentSession?.batchName} · {studentSession?.studentId}</span>
+            <strong>{studentSession.name}</strong>
+            <span>{studentSession.batchName} · {studentSession.studentId}</span>
           </div>
           <button type="button" className="secondary-button" onClick={handleLogout}>
             Log out
