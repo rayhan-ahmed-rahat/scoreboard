@@ -3,7 +3,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import LoadingState from "../common/LoadingState";
 
 function StudentLayout() {
-  const { studentSession, logoutStudent, loading } = useAuth();
+  const { user, studentSession, logoutStudent, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -12,7 +12,7 @@ function StudentLayout() {
   }
 
   if (!studentSession) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to={user ? "/" : "/login"} state={!user ? { from: location } : undefined} replace />;
   }
 
   const handleLogout = () => {

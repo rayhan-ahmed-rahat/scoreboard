@@ -20,7 +20,9 @@ function LoginPage() {
   }, []);
 
   if (user) {
-    return <Navigate to={location.state?.from?.pathname || "/"} replace />;
+    const from = location.state?.from?.pathname;
+    const safePath = from && !from.startsWith("/student") ? from : "/";
+    return <Navigate to={safePath} replace />;
   }
 
   if (studentSession) {
