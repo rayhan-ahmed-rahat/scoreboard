@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
   callNextStudent,
+  clearOldResolvedEntries,
   resolveQueueEntry,
   subscribeToQueue,
 } from "../services/queueService";
@@ -64,6 +65,20 @@ function QueueManagementPage() {
     }
   };
 
+  const handleClearOld = async () => {
+    if (!window.confirm("Delete all resolved entries from previous days? This cannot be undone.")) return;
+    setBusy(true);
+
+    try {
+      const count = await clearOldResolvedEntries();
+      showToast(count > 0 ? `Cleared ${count} old entries.` : "No old entries to clear.");
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleResolve = async (entryId, resolution, studentName) => {
     setBusy(true);
 
@@ -99,6 +114,14 @@ function QueueManagementPage() {
           </p>
         </div>
         <div className="topbar__actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleClearOld}
+            disabled={busy}
+          >
+            Clear old entries
+          </button>
           {!inProgressEntry && waitingQueue.length > 0 && (
             <button
               type="button"

@@ -10,6 +10,7 @@ import {
   serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { COLLECTIONS } from "../firebase/collections";
 import { db } from "../firebase/config";
@@ -70,4 +71,30 @@ export async function resolveQueueEntry(entryId, resolution, teacherName) {
     resolvedAt: serverTimestamp(),
     resolvedByName: teacherName || "Teacher",
   });
+}
+
+export async function clearOldResolvedEntries() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, COLLECTIONS.EVALUATION_QUEUE),
+      where("status", "in", ["done", "skipped"])
+    )
+  );
+
+  const toDelete = snapshot.docs.filter((document) => {
+    const data = document.data();
+    const resolved = data.resolvedAt?.toDate?.() || (data.resolvedAt ? new Date(data.resolvedAt) : null);
+    return resolved && resolved < today;
+  });
+
+  if (!toDelete.length) return 0;
+
+  const batchWriter = writeBatch(db);
+  toDelete.forEach((document) => batchWriter.delete(document.ref));
+  await batchWriter.commit();
+
+  return toDelete.length;
 }
