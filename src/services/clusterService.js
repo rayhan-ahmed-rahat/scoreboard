@@ -69,24 +69,11 @@ export function subscribeToCluster(clusterId, callback, onError) {
   );
 }
 
-export async function updateTeacherNameInClusters(teacherUid, newName) {
-  const snapshot = await getDocs(
-    query(
-      collection(db, COLLECTIONS.CLUSTERS),
-      where("assignedTeacherUid", "==", teacherUid)
-    )
-  );
-
-  if (snapshot.empty) return;
-
-  await Promise.all(
-    snapshot.docs.map((document) =>
-      updateDoc(document.ref, {
-        assignedTeacherName: newName,
-        updatedAt: serverTimestamp(),
-      })
-    )
-  );
+export async function patchClusterTeacherName(clusterId, teacherName) {
+  await updateDoc(doc(db, COLLECTIONS.CLUSTERS, clusterId), {
+    assignedTeacherName: teacherName,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function addCluster(payload) {

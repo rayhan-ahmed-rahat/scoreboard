@@ -28,9 +28,9 @@ import {
 import {
   addCluster,
   deleteCluster,
+  patchClusterTeacherName,
   subscribeToClusters,
   updateCluster,
-  updateTeacherNameInClusters,
 } from "../services/clusterService";
 import { seedDemoData } from "../services/seedService";
 import { subscribeToUsers, updateUserRole } from "../services/userService";
@@ -261,8 +261,12 @@ function SettingsPage() {
         },
         { merge: true }
       );
-      // Propagate name change to any clusters this teacher is assigned to
-      await updateTeacherNameInClusters(user.uid, trimmedName);
+      // Propagate name change to any clusters already assigned to this teacher
+      // Uses the already-loaded clusters state — no extra Firestore query needed
+      const myClusters = clusters.filter((c) => c.assignedTeacherUid === user.uid);
+      if (myClusters.length > 0) {
+        await Promise.all(myClusters.map((c) => patchClusterTeacherName(c.id, trimmedName)));
+      }
       showToast("Teacher profile updated.");
     } catch (nextError) {
       showToast(nextError.message, "error");
