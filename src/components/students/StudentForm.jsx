@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const initialFormState = {
   name: "",
@@ -6,11 +6,12 @@ const initialFormState = {
   age: "",
   school: "",
   batch: "",
+  clusterId: "",
   status: "active",
   notes: "",
 };
 
-function StudentForm({ initialValues, batches, onSubmit, onCancel, busy }) {
+function StudentForm({ initialValues, batches, clusters, onSubmit, onCancel, busy }) {
   const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ function StudentForm({ initialValues, batches, onSubmit, onCancel, busy }) {
         age: initialValues.age || "",
         school: initialValues.school || "",
         batch: initialValues.batch || "",
+        clusterId: initialValues.clusterId || "",
         status: initialValues.status || "active",
         notes: initialValues.notes || "",
       });
@@ -30,13 +32,26 @@ function StudentForm({ initialValues, batches, onSubmit, onCancel, busy }) {
     setFormData(initialFormState);
   }, [initialValues]);
 
+  const batchClusters = useMemo(
+    () => (clusters || []).filter((c) => c.batchId === formData.batch),
+    [clusters, formData.batch]
+  );
+
   const handleChange = (event) => {
     const { name, value } = event.target;
+
+    if (name === "batch") {
+      setFormData((current) => ({ ...current, batch: value, clusterId: "" }));
+      return;
+    }
+
     setFormData((current) => ({ ...current, [name]: value }));
   };
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    const selectedCluster = (clusters || []).find((c) => c.id === formData.clusterId);
 
     onSubmit({
       ...formData,
@@ -45,6 +60,8 @@ function StudentForm({ initialValues, batches, onSubmit, onCancel, busy }) {
       studentId: formData.studentId.trim(),
       school: formData.school.trim(),
       batch: formData.batch.trim(),
+      clusterId: formData.clusterId || "",
+      clusterName: selectedCluster?.name || "",
       notes: formData.notes.trim(),
     });
   };
@@ -80,6 +97,20 @@ function StudentForm({ initialValues, batches, onSubmit, onCancel, busy }) {
           {batches.map((batch) => (
             <option key={batch.id} value={batch.id}>
               {batch.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span>Cluster</span>
+        <select name="clusterId" value={formData.clusterId} onChange={handleChange}>
+          <option value="">No cluster</option>
+          {batchClusters.length === 0 && formData.batch ? (
+            <option value="" disabled>No clusters in this batch</option>
+          ) : null}
+          {batchClusters.map((cluster) => (
+            <option key={cluster.id} value={cluster.id}>
+              {cluster.name}
             </option>
           ))}
         </select>

@@ -1,16 +1,31 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
-
-const navigationItems = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/score-entry", label: "Score Entry" },
-  { to: "/students", label: "Students" },
-  { to: "/leaderboard/manage", label: "Leaderboard" },
-  { to: "/queue", label: "Queue" },
-  { to: "/reports", label: "Reports" },
-  { to: "/settings", label: "Settings" },
-];
+import { subscribeToQueue } from "../../services/queueService";
 
 function Sidebar() {
+  const [waitingCount, setWaitingCount] = useState(0);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToQueue(
+      (rows) => {
+        setWaitingCount(rows.filter((e) => e.status === "waiting").length);
+      },
+      () => {}
+    );
+
+    return unsubscribe;
+  }, []);
+
+  const navigationItems = [
+    { to: "/", label: "Dashboard", end: true },
+    { to: "/score-entry", label: "Score Entry" },
+    { to: "/queue", label: "Queue" },
+    { to: "/students", label: "Students" },
+    { to: "/leaderboard/manage", label: "Leaderboard" },
+    { to: "/reports", label: "Reports" },
+    { to: "/settings", label: "Settings" },
+  ];
+
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
@@ -32,6 +47,9 @@ function Sidebar() {
             }
           >
             {item.label}
+            {item.to === "/queue" && waitingCount > 0 && (
+              <span className="queue-count-badge">{waitingCount}</span>
+            )}
           </NavLink>
         ))}
       </nav>

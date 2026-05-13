@@ -51,14 +51,14 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
         isTeacher() &&
-        request.resource.data.name == resource.data.name &&
         request.resource.data.studentId == resource.data.studentId &&
-        request.resource.data.age == resource.data.age &&
-        request.resource.data.school == resource.data.school &&
-        request.resource.data.batch == resource.data.batch &&
-        request.resource.data.status == resource.data.status &&
-        request.resource.data.notes == resource.data.notes
+        request.resource.data.batch == resource.data.batch
       );
+    }
+
+    match /clusters/{clusterId} {
+      allow read: if true;
+      allow create, update, delete: if isTeacher();
     }
 
     match /categories/{categoryId} {

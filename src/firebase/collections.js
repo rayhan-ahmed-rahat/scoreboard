@@ -8,6 +8,7 @@ export const COLLECTIONS = {
   LEADERBOARD_SNAPSHOTS: "leaderboard_snapshots",
   SETTINGS: "settings",
   EVALUATION_QUEUE: "evaluation_queue",
+  CLUSTERS: "clusters",
 };
 
 export const ROLES = {

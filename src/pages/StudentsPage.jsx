@@ -18,15 +18,17 @@ import {
   subscribeToStudents,
   updateStudent,
 } from "../services/studentService";
+import { subscribeToClusters } from "../services/clusterService";
 import { formatDate, formatPoints } from "../utils/formatters";
 
 const PAGE_SIZE = 10;
 
 function StudentsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isTeacher } = useAuth();
   const { showToast } = useToast();
   const [students, setStudents] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [clusters, setClusters] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [batchFilter, setBatchFilter] = useState("all");
   const [studentModalState, setStudentModalState] = useState({ open: false, student: null });
@@ -40,7 +42,7 @@ function StudentsPage() {
     let loadedStreams = 0;
     const markLoaded = () => {
       loadedStreams += 1;
-      if (loadedStreams >= 2) {
+      if (loadedStreams >= 3) {
         setLoading(false);
       }
     };
@@ -64,10 +66,18 @@ function StudentsPage() {
       },
       handleError
     );
+    const unsubscribeClusters = subscribeToClusters(
+      (rows) => {
+        setClusters(rows);
+        markLoaded();
+      },
+      handleError
+    );
 
     return () => {
       unsubscribeStudents();
       unsubscribeBatches();
+      unsubscribeClusters();
     };
   }, []);
 
@@ -169,11 +179,11 @@ function StudentsPage() {
         title="Students"
         action={
           <div className="toolbar-actions">
+            <Link to="/score-entry" className="secondary-button">
+              Open score entry
+            </Link>
             {isAdmin ? (
               <>
-                <Link to="/score-entry" className="secondary-button">
-                  Open score entry
-                </Link>
                 <button
                   type="button"
                   className="secondary-button"
@@ -189,11 +199,7 @@ function StudentsPage() {
                   Add student
                 </button>
               </>
-            ) : (
-              <Link to="/score-entry" className="secondary-button">
-                Open score entry
-              </Link>
-            )}
+            ) : null}
           </div>
         }
       >
@@ -257,23 +263,23 @@ function StudentsPage() {
                   <Link to={`/students/${row.id}`} className="text-link">
                     View
                   </Link>
+                  {isTeacher ? (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => setStudentModalState({ open: true, student: row })}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
                   {isAdmin ? (
-                    <>
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => setStudentModalState({ open: true, student: row })}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="text-button text-button--danger"
-                        onClick={() => handleDeleteStudent(row)}
-                      >
-                        Delete
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      className="text-button text-button--danger"
+                      onClick={() => handleDeleteStudent(row)}
+                    >
+                      Delete
+                    </button>
                   ) : null}
                 </div>
               ),
@@ -299,6 +305,7 @@ function StudentsPage() {
           <StudentForm
             initialValues={studentModalState.student}
             batches={batches}
+            clusters={clusters}
             onSubmit={handleSaveStudent}
             onCancel={() => setStudentModalState({ open: false, student: null })}
             busy={busy}

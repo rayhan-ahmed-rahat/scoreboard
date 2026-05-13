@@ -108,6 +108,8 @@ export function AuthProvider({ children }) {
       name: data.name,
       batch: batchId,
       batchName: data.batchName || "",
+      clusterId: data.clusterId || "",
+      clusterName: data.clusterName || "",
     };
 
     localStorage.setItem("studentSession", JSON.stringify(session));

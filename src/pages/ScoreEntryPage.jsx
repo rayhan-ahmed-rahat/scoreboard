@@ -55,7 +55,9 @@ function ScoreEntryPage() {
   const [batches, setBatches] = useState([]);
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [batchFilter, setBatchFilter] = useState("all");
+  const [batchFilter, setBatchFilter] = useState(
+    () => localStorage.getItem("scoreEntryBatch") || "all"
+  );
   const [rowInputs, setRowInputs] = useState({});
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [busyCategoryId, setBusyCategoryId] = useState("");
@@ -250,7 +252,10 @@ function ScoreEntryPage() {
             <span>Batch / Group</span>
             <select
               value={batchFilter}
-              onChange={(event) => setBatchFilter(event.target.value)}
+              onChange={(event) => {
+                localStorage.setItem("scoreEntryBatch", event.target.value);
+                setBatchFilter(event.target.value);
+              }}
             >
               <option value="all">All batches</option>
               {batches.map((batch) => (

@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { COLLECTIONS } from "../firebase/collections";
 import { db } from "../firebase/config";
+import { getClusterById } from "./clusterService";
 
 export function subscribeToQueue(callback, onError) {
   const queueQuery = query(
@@ -29,7 +30,7 @@ export function subscribeToQueue(callback, onError) {
   );
 }
 
-export async function joinQueue({ studentRef, studentId, studentName, batch, batchName, reason }) {
+export async function joinQueue({ studentRef, studentId, studentName, batch, batchName, clusterId, clusterName, reason }) {
   const existingSnapshot = await getDocs(
     query(
       collection(db, COLLECTIONS.EVALUATION_QUEUE),
@@ -42,15 +43,44 @@ export async function joinQueue({ studentRef, studentId, studentName, batch, bat
     throw new Error("You are already in the queue.");
   }
 
+  let assignedTeacherUid = "";
+  let assignedTeacherName = "";
+
+  if (clusterId) {
+    const cluster = await getClusterById(clusterId);
+    if (cluster) {
+      assignedTeacherUid = cluster.assignedTeacherUid || "";
+      assignedTeacherName = cluster.assignedTeacherName || "";
+    }
+  }
+
   await addDoc(collection(db, COLLECTIONS.EVALUATION_QUEUE), {
     studentRef,
     studentId,
     studentName,
     batch,
     batchName,
+    clusterId: clusterId || "",
+    clusterName: clusterName || "",
+    assignedTeacherUid,
+    assignedTeacherName,
     reason: reason?.trim() || "",
     status: "waiting",
     createdAt: serverTimestamp(),
+  });
+}
+
+export async function assignToMe(entryId, teacherUid, teacherName) {
+  await updateDoc(doc(db, COLLECTIONS.EVALUATION_QUEUE, entryId), {
+    assignedTeacherUid: teacherUid,
+    assignedTeacherName: teacherName || "",
+  });
+}
+
+export async function returnStudentToWaiting(entryId) {
+  await updateDoc(doc(db, COLLECTIONS.EVALUATION_QUEUE, entryId), {
+    status: "waiting",
+    calledAt: null,
   });
 }
 

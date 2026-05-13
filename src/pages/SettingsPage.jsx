@@ -9,6 +9,7 @@ import RoleBadge from "../components/common/RoleBadge";
 import SectionCard from "../components/common/SectionCard";
 import BatchForm from "../components/scores/BatchForm";
 import CategoryForm from "../components/scores/CategoryForm";
+import ClusterForm from "../components/common/ClusterForm";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { COLLECTIONS, ROLES } from "../firebase/collections";
@@ -24,6 +25,12 @@ import {
   updateBatch,
   updateCategory,
 } from "../services/studentService";
+import {
+  addCluster,
+  deleteCluster,
+  subscribeToClusters,
+  updateCluster,
+} from "../services/clusterService";
 import { seedDemoData } from "../services/seedService";
 import { subscribeToUsers, updateUserRole } from "../services/userService";
 
@@ -32,6 +39,7 @@ function SettingsPage() {
   const { showToast } = useToast();
   const [categories, setCategories] = useState([]);
   const [batches, setBatches] = useState([]);
+  const [clusters, setClusters] = useState([]);
   const [users, setUsers] = useState([]);
   const [modalState, setModalState] = useState({ type: "", item: null });
   const [busy, setBusy] = useState(false);
@@ -41,7 +49,7 @@ function SettingsPage() {
 
   useEffect(() => {
     let loadedStreams = 0;
-    const expectedStreams = isAdmin ? 3 : 2;
+    const expectedStreams = isAdmin ? 4 : 3;
     const markLoaded = () => {
       loadedStreams += 1;
       if (loadedStreams >= expectedStreams) {
@@ -67,6 +75,13 @@ function SettingsPage() {
       },
       handleError
     );
+    const unsubscribeClusters = subscribeToClusters(
+      (rows) => {
+        setClusters(rows);
+        markLoaded();
+      },
+      handleError
+    );
     const unsubscribeUsers = isAdmin
       ? subscribeToUsers(
           (rows) => {
@@ -80,6 +95,7 @@ function SettingsPage() {
     return () => {
       unsubscribeCategories();
       unsubscribeBatches();
+      unsubscribeClusters();
       unsubscribeUsers();
     };
   }, [isAdmin]);
@@ -175,6 +191,40 @@ function SettingsPage() {
     try {
       await deleteBatch(batch.id);
       showToast("Batch deleted successfully.");
+    } catch (nextError) {
+      showToast(nextError.message, "error");
+    }
+  };
+
+  const handleSaveCluster = async (payload) => {
+    setBusy(true);
+
+    try {
+      if (modalState.item) {
+        await updateCluster(modalState.item.id, payload);
+        showToast("Cluster updated successfully.");
+      } else {
+        await addCluster(payload);
+        showToast("Cluster created successfully.");
+      }
+      setModalState({ type: "", item: null });
+    } catch (nextError) {
+      showToast(nextError.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeleteCluster = async (cluster) => {
+    const confirmed = window.confirm(`Delete cluster "${cluster.name}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteCluster(cluster.id);
+      showToast("Cluster deleted successfully.");
     } catch (nextError) {
       showToast(nextError.message, "error");
     }
@@ -420,6 +470,60 @@ function SettingsPage() {
         </SectionCard>
       </div>
 
+      <SectionCard
+        title="Cluster management"
+        action={
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setModalState({ type: "cluster", item: null })}
+          >
+            Add cluster
+          </button>
+        }
+      >
+        <DataTable
+          columns={[
+            { key: "name", label: "Cluster" },
+            {
+              key: "batchId",
+              label: "Batch",
+              render: (_, row) => row.batchName || row.batchId || "—",
+            },
+            {
+              key: "assignedTeacherName",
+              label: "Assigned teacher",
+              render: (value) => value || <span className="muted-copy">Unassigned</span>,
+            },
+            {
+              key: "actions",
+              label: "Actions",
+              render: (_, row) => (
+                <div className="table-actions">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setModalState({ type: "cluster", item: row })}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="text-button text-button--danger"
+                    onClick={() => handleDeleteCluster(row)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ),
+            },
+          ]}
+          rows={clusters}
+          emptyTitle="No clusters yet"
+          emptyDescription="Create clusters to divide a batch into groups, each assigned to a teacher."
+        />
+      </SectionCard>
+
       {isAdmin ? (
         <SectionCard title="User roles">
           <DataTable
@@ -483,6 +587,22 @@ function SettingsPage() {
           <BatchForm
             initialValues={modalState.item}
             onSubmit={handleSaveBatch}
+            onCancel={() => setModalState({ type: "", item: null })}
+            busy={busy}
+          />
+        </Modal>
+      ) : null}
+
+      {modalState.type === "cluster" ? (
+        <Modal
+          title={modalState.item ? "Edit cluster" : "Add cluster"}
+          onClose={() => setModalState({ type: "", item: null })}
+        >
+          <ClusterForm
+            initialValues={modalState.item}
+            batches={batches}
+            users={users}
+            onSubmit={handleSaveCluster}
             onCancel={() => setModalState({ type: "", item: null })}
             busy={busy}
           />

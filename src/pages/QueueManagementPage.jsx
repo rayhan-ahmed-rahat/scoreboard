@@ -3,67 +3,86 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import {
+  assignToMe,
   callNextStudent,
   clearOldResolvedEntries,
   resolveQueueEntry,
+  returnStudentToWaiting,
   subscribeToQueue,
 } from "../services/queueService";
+import { subscribeToUsers } from "../services/userService";
 
 function QueueManagementPage() {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { showToast } = useToast();
   const [queue, setQueue] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeToQueue(
-      (rows) => {
-        setQueue(rows);
-        setLoading(false);
-      },
-      () => setLoading(false)
+    let loadedStreams = 0;
+    const markLoaded = () => {
+      loadedStreams += 1;
+      if (loadedStreams >= 2) setLoading(false);
+    };
+
+    const unsubscribeQueue = subscribeToQueue(
+      (rows) => { setQueue(rows); markLoaded(); },
+      () => markLoaded()
+    );
+    const unsubscribeUsers = subscribeToUsers(
+      (rows) => { setUsers(rows); markLoaded(); },
+      () => markLoaded()
     );
 
-    return unsubscribe;
+    return () => {
+      unsubscribeQueue();
+      unsubscribeUsers();
+    };
   }, []);
 
-  const waitingQueue = useMemo(
-    () => queue.filter((e) => e.status === "waiting"),
+  const teacherName = profile?.displayName || profile?.email || "Teacher";
+
+  // My queue (entries assigned to this teacher, still waiting)
+  const myWaiting = useMemo(
+    () => queue.filter((e) => e.status === "waiting" && e.assignedTeacherUid === profile?.uid),
+    [queue, profile?.uid]
+  );
+
+  // The entry currently being served by this teacher
+  const myInProgress = useMemo(
+    () => queue.find((e) => e.status === "in_progress" && e.assignedTeacherUid === profile?.uid) || null,
+    [queue, profile?.uid]
+  );
+
+  // Unassigned waiting entries
+  const unassigned = useMemo(
+    () => queue.filter((e) => e.status === "waiting" && !e.assignedTeacherUid),
     [queue]
   );
 
-  const inProgressEntry = useMemo(
-    () => queue.find((e) => e.status === "in_progress") || null,
-    [queue]
-  );
-
-  const resolvedToday = useMemo(() => {
+  // Entries resolved today by this teacher
+  const myResolvedToday = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     return queue.filter((e) => {
       if (e.status !== "done" && e.status !== "skipped") return false;
+      if (e.assignedTeacherUid !== profile?.uid) return false;
       const resolved = e.resolvedAt?.toDate?.() || new Date(e.resolvedAt);
       return resolved >= today;
     });
-  }, [queue]);
+  }, [queue, profile?.uid]);
 
-  const teacherName = profile?.displayName || profile?.email || "Teacher";
+  // Auto-advance: when no in_progress entry, pull the next waiting entry
+  useEffect(() => {
+    if (loading) return;
+    if (myInProgress) return;
+    if (myWaiting.length === 0) return;
 
-  const handleCallNext = async () => {
-    if (!waitingQueue.length) return;
-    setBusy(true);
-
-    try {
-      await callNextStudent(waitingQueue[0].id);
-      showToast(`Called ${waitingQueue[0].studentName} to the front.`);
-    } catch (error) {
-      showToast(error.message, "error");
-    } finally {
-      setBusy(false);
-    }
-  };
+    callNextStudent(myWaiting[0].id).catch(() => {});
+  }, [loading, myInProgress?.id, myWaiting.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClearOld = async () => {
     if (!window.confirm("Delete all resolved entries from previous days? This cannot be undone.")) return;
@@ -96,6 +115,61 @@ function QueueManagementPage() {
     }
   };
 
+  const handleCallFromMiddle = async (entry) => {
+    setBusy(true);
+
+    try {
+      if (myInProgress) {
+        await returnStudentToWaiting(myInProgress.id);
+      }
+      await callNextStudent(entry.id);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReturnToWaiting = async (entryId) => {
+    setBusy(true);
+
+    try {
+      await returnStudentToWaiting(entryId);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAssignToMe = async (entry) => {
+    setBusy(true);
+
+    try {
+      await assignToMe(entry.id, profile.uid, teacherName);
+      showToast(`${entry.studentName} assigned to you.`);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleAssignToTeacher = async (entry, teacherUid) => {
+    const selectedUser = users.find((u) => u.id === teacherUid);
+    const name = selectedUser?.displayName || selectedUser?.email || "";
+    setBusy(true);
+
+    try {
+      await assignToMe(entry.id, teacherUid, name);
+      showToast(`${entry.studentName} assigned to ${name || "teacher"}.`);
+    } catch (error) {
+      showToast(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="screen-center">
@@ -110,7 +184,7 @@ function QueueManagementPage() {
         <div>
           <h2>Queue Management</h2>
           <p>
-            {waitingQueue.length} waiting · {resolvedToday.length} resolved today
+            {myWaiting.length} waiting · {myResolvedToday.length} resolved today
           </p>
         </div>
         <div className="topbar__actions">
@@ -122,34 +196,25 @@ function QueueManagementPage() {
           >
             Clear old entries
           </button>
-          {!inProgressEntry && waitingQueue.length > 0 && (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleCallNext}
-              disabled={busy}
-            >
-              Call next student
-            </button>
-          )}
         </div>
       </div>
 
-      {inProgressEntry && (
+      {myInProgress && (
         <section className="queue-serving-card">
           <div className="queue-serving-card__badge">Now serving</div>
           <div className="queue-serving-card__info">
-            <h3>{inProgressEntry.studentName}</h3>
+            <h3>{myInProgress.studentName}</h3>
             <p>
-              {inProgressEntry.studentId} · {inProgressEntry.batchName}
+              {myInProgress.studentId} · {myInProgress.batchName}
+              {myInProgress.clusterName ? ` · ${myInProgress.clusterName}` : ""}
             </p>
-            {inProgressEntry.reason && (
-              <p className="queue-serving-reason">"{inProgressEntry.reason}"</p>
+            {myInProgress.reason && (
+              <p className="queue-serving-reason">"{myInProgress.reason}"</p>
             )}
           </div>
           <div className="queue-serving-card__actions">
             <Link
-              to={`/score-entry`}
+              to="/score-entry"
               className="secondary-button"
               style={{ textDecoration: "none", display: "inline-block" }}
             >
@@ -158,9 +223,7 @@ function QueueManagementPage() {
             <button
               type="button"
               className="primary-button"
-              onClick={() =>
-                handleResolve(inProgressEntry.id, "done", inProgressEntry.studentName)
-              }
+              onClick={() => handleResolve(myInProgress.id, "done", myInProgress.studentName)}
               disabled={busy}
             >
               Mark done
@@ -168,12 +231,18 @@ function QueueManagementPage() {
             <button
               type="button"
               className="secondary-button"
-              onClick={() =>
-                handleResolve(inProgressEntry.id, "skipped", inProgressEntry.studentName)
-              }
+              onClick={() => handleResolve(myInProgress.id, "skipped", myInProgress.studentName)}
               disabled={busy}
             >
               Skip
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => handleReturnToWaiting(myInProgress.id)}
+              disabled={busy}
+            >
+              Return to queue
             </button>
           </div>
         </section>
@@ -182,32 +251,52 @@ function QueueManagementPage() {
       <div className="two-column-layout">
         <section className="card">
           <div className="section-card__header">
-            <h2>Waiting queue</h2>
-            {!inProgressEntry && waitingQueue.length > 0 && (
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleCallNext}
-                disabled={busy}
-              >
-                Call next
-              </button>
-            )}
+            <h2>My queue</h2>
+            <span className="muted-copy">{myWaiting.length} waiting</span>
           </div>
 
-          {waitingQueue.length === 0 ? (
-            <p className="muted-copy">No students waiting.</p>
+          {myWaiting.length === 0 ? (
+            <p className="muted-copy">No students in your queue.</p>
           ) : (
             <ol className="queue-list queue-list--teacher">
-              {waitingQueue.map((entry, index) => (
+              {myWaiting.map((entry, index) => (
                 <li key={entry.id} className="queue-list-item">
                   <span className="queue-list-item__pos">#{index + 1}</span>
                   <div className="queue-list-item__info">
                     <strong>{entry.studentName}</strong>
-                    <span>{entry.studentId} · {entry.batchName}</span>
+                    <span>
+                      {entry.studentId} · {entry.batchName}
+                      {entry.clusterName ? ` · ${entry.clusterName}` : ""}
+                    </span>
                     {entry.reason && (
                       <span className="queue-list-item__reason">{entry.reason}</span>
                     )}
+                  </div>
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => handleCallFromMiddle(entry)}
+                      disabled={busy}
+                    >
+                      Serve now
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => handleResolve(entry.id, "done", entry.studentName)}
+                      disabled={busy}
+                    >
+                      Done
+                    </button>
+                    <button
+                      type="button"
+                      className="text-button text-button--danger"
+                      onClick={() => handleResolve(entry.id, "skipped", entry.studentName)}
+                      disabled={busy}
+                    >
+                      Skip
+                    </button>
                   </div>
                 </li>
               ))}
@@ -217,35 +306,95 @@ function QueueManagementPage() {
 
         <section className="card">
           <div className="section-card__header">
-            <h2>Resolved today</h2>
+            <h2>Unassigned</h2>
+            <span className="muted-copy">{unassigned.length} waiting</span>
           </div>
 
-          {resolvedToday.length === 0 ? (
-            <p className="muted-copy">Nothing resolved yet today.</p>
+          {unassigned.length === 0 ? (
+            <p className="muted-copy">No unassigned students.</p>
           ) : (
-            <ul className="queue-list queue-list--teacher">
-              {resolvedToday.map((entry) => (
+            <ol className="queue-list queue-list--teacher">
+              {unassigned.map((entry, index) => (
                 <li key={entry.id} className="queue-list-item">
-                  <span
-                    className={
-                      entry.status === "done" ? "pill pill--success" : "pill pill--muted"
-                    }
-                  >
-                    {entry.status === "done" ? "Done" : "Skipped"}
-                  </span>
+                  <span className="queue-list-item__pos">#{index + 1}</span>
                   <div className="queue-list-item__info">
                     <strong>{entry.studentName}</strong>
-                    <span>{entry.studentId} · {entry.batchName}</span>
+                    <span>
+                      {entry.studentId} · {entry.batchName}
+                      {entry.clusterName ? ` · ${entry.clusterName}` : ""}
+                    </span>
                     {entry.reason && (
                       <span className="queue-list-item__reason">{entry.reason}</span>
                     )}
                   </div>
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => handleAssignToMe(entry)}
+                      disabled={busy}
+                    >
+                      Assign to me
+                    </button>
+                    {isAdmin && (
+                      <select
+                        className="inline-select"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) handleAssignToTeacher(entry, e.target.value);
+                          e.target.value = "";
+                        }}
+                        disabled={busy}
+                      >
+                        <option value="">Assign to…</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.displayName || u.email}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           )}
         </section>
       </div>
+
+      <section className="card">
+        <div className="section-card__header">
+          <h2>Resolved today</h2>
+        </div>
+
+        {myResolvedToday.length === 0 ? (
+          <p className="muted-copy">Nothing resolved yet today.</p>
+        ) : (
+          <ul className="queue-list queue-list--teacher">
+            {myResolvedToday.map((entry) => (
+              <li key={entry.id} className="queue-list-item">
+                <span
+                  className={
+                    entry.status === "done" ? "pill pill--success" : "pill pill--muted"
+                  }
+                >
+                  {entry.status === "done" ? "Done" : "Skipped"}
+                </span>
+                <div className="queue-list-item__info">
+                  <strong>{entry.studentName}</strong>
+                  <span>
+                    {entry.studentId} · {entry.batchName}
+                    {entry.clusterName ? ` · ${entry.clusterName}` : ""}
+                  </span>
+                  {entry.reason && (
+                    <span className="queue-list-item__reason">{entry.reason}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

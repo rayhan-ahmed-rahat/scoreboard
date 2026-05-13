@@ -59,6 +59,8 @@ function StudentQueuePage() {
         studentName: studentSession.name,
         batch: studentSession.batch,
         batchName: studentSession.batchName,
+        clusterId: studentSession.clusterId || "",
+        clusterName: studentSession.clusterName || "",
         reason,
       });
       setReason("");
@@ -114,6 +116,11 @@ function StudentQueuePage() {
             </p>
             {myEntry.reason && (
               <p className="queue-status-card__reason">Your note: {myEntry.reason}</p>
+            )}
+            {myEntry.assignedTeacherName && (
+              <p className="queue-status-card__reason">
+                Assigned to: {myEntry.assignedTeacherName}
+              </p>
             )}
             <button
               type="button"
