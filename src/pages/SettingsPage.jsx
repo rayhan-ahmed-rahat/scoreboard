@@ -30,6 +30,7 @@ import {
   deleteCluster,
   subscribeToClusters,
   updateCluster,
+  updateTeacherNameInClusters,
 } from "../services/clusterService";
 import { seedDemoData } from "../services/seedService";
 import { subscribeToUsers, updateUserRole } from "../services/userService";
@@ -247,17 +248,21 @@ function SettingsPage() {
   const handleProfileSave = async (event) => {
     event.preventDefault();
 
+    const trimmedName = displayName.trim();
+
     try {
-      await updateProfile(auth.currentUser, { displayName: displayName.trim() });
+      await updateProfile(auth.currentUser, { displayName: trimmedName });
       await setDoc(
         doc(db, COLLECTIONS.USERS, user.uid),
         {
-          displayName: displayName.trim(),
+          displayName: trimmedName,
           email: user.email,
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
+      // Propagate name change to any clusters this teacher is assigned to
+      await updateTeacherNameInClusters(user.uid, trimmedName);
       showToast("Teacher profile updated.");
     } catch (nextError) {
       showToast(nextError.message, "error");

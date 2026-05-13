@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
+import { subscribeToCluster } from "../services/clusterService";
 import { joinQueue, leaveQueue, subscribeToQueue } from "../services/queueService";
 
 function StudentQueuePage() {
   const { studentSession } = useAuth();
   const { showToast } = useToast();
   const [queue, setQueue] = useState([]);
+  const [myCluster, setMyCluster] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -23,10 +25,30 @@ function StudentQueuePage() {
     return unsubscribe;
   }, []);
 
-  const activeQueue = useMemo(
+  // Subscribe to live cluster data so teacher name is always fresh
+  useEffect(() => {
+    if (!studentSession?.clusterId) return;
+
+    const unsubscribe = subscribeToCluster(
+      studentSession.clusterId,
+      (cluster) => setMyCluster(cluster),
+      () => {}
+    );
+
+    return unsubscribe;
+  }, [studentSession?.clusterId]);
+
+  // All active entries in the queue
+  const fullActiveQueue = useMemo(
     () => queue.filter((entry) => entry.status === "waiting" || entry.status === "in_progress"),
     [queue]
   );
+
+  // Scoped to this student's cluster (if they have one), otherwise show all
+  const activeQueue = useMemo(() => {
+    if (!studentSession?.clusterId) return fullActiveQueue;
+    return fullActiveQueue.filter((entry) => entry.clusterId === studentSession.clusterId);
+  }, [fullActiveQueue, studentSession?.clusterId]);
 
   const waitingQueue = useMemo(
     () => activeQueue.filter((e) => e.status === "waiting"),
@@ -47,6 +69,9 @@ function StudentQueuePage() {
     if (!myEntry || myEntry.status === "in_progress") return null;
     return waitingPositionMap.get(myEntry.id) || null;
   }, [myEntry, waitingPositionMap]);
+
+  // Live teacher name from the cluster doc (falls back to stored name on the queue entry)
+  const assignedTeacherName = myCluster?.assignedTeacherName || myEntry?.assignedTeacherName || "";
 
   const handleJoin = async (event) => {
     event.preventDefault();
@@ -103,7 +128,7 @@ function StudentQueuePage() {
           <div className="queue-status-card queue-status-card--active">
             <div className="queue-status-card__number">Now</div>
             <h2>The teacher is ready for you!</h2>
-            <p>Please go to the front now. The teacher is waiting.</p>
+            <p>Please wait patiently, no need to raise your hands.</p>
           </div>
         ) : myEntry ? (
           <div className="queue-status-card queue-status-card--waiting">
@@ -117,9 +142,9 @@ function StudentQueuePage() {
             {myEntry.reason && (
               <p className="queue-status-card__reason">Your note: {myEntry.reason}</p>
             )}
-            {myEntry.assignedTeacherName && (
+            {assignedTeacherName && (
               <p className="queue-status-card__reason">
-                Assigned to: {myEntry.assignedTeacherName}
+                Assigned to: {assignedTeacherName}
               </p>
             )}
             <button

@@ -59,6 +59,36 @@ export async function getClusterById(clusterId) {
   return { id: snapshot.id, ...snapshot.data() };
 }
 
+export function subscribeToCluster(clusterId, callback, onError) {
+  return onSnapshot(
+    doc(db, COLLECTIONS.CLUSTERS, clusterId),
+    (snapshot) => {
+      callback(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+    },
+    onError
+  );
+}
+
+export async function updateTeacherNameInClusters(teacherUid, newName) {
+  const snapshot = await getDocs(
+    query(
+      collection(db, COLLECTIONS.CLUSTERS),
+      where("assignedTeacherUid", "==", teacherUid)
+    )
+  );
+
+  if (snapshot.empty) return;
+
+  await Promise.all(
+    snapshot.docs.map((document) =>
+      updateDoc(document.ref, {
+        assignedTeacherName: newName,
+        updatedAt: serverTimestamp(),
+      })
+    )
+  );
+}
+
 export async function addCluster(payload) {
   await addDoc(collection(db, COLLECTIONS.CLUSTERS), {
     ...payload,
