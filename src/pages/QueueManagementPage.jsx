@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
@@ -19,6 +19,8 @@ function QueueManagementPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Prevents auto-advance from firing during manual "Serve now" / "Return to queue" actions
+  const suppressAutoAdvance = useRef(false);
 
   useEffect(() => {
     let loadedStreams = 0;
@@ -75,9 +77,11 @@ function QueueManagementPage() {
     });
   }, [queue, profile?.uid]);
 
-  // Auto-advance: when no in_progress entry, pull the next waiting entry
+  // Auto-advance: when no in_progress entry, pull the next waiting entry.
+  // Suppressed during manual "Serve now" / "Return to queue" to avoid race conditions.
   useEffect(() => {
     if (loading) return;
+    if (suppressAutoAdvance.current) return;
     if (myInProgress) return;
     if (myWaiting.length === 0) return;
 
@@ -116,6 +120,7 @@ function QueueManagementPage() {
   };
 
   const handleCallFromMiddle = async (entry) => {
+    suppressAutoAdvance.current = true;
     setBusy(true);
 
     try {
@@ -126,11 +131,13 @@ function QueueManagementPage() {
     } catch (error) {
       showToast(error.message, "error");
     } finally {
+      suppressAutoAdvance.current = false;
       setBusy(false);
     }
   };
 
   const handleReturnToWaiting = async (entryId) => {
+    suppressAutoAdvance.current = true;
     setBusy(true);
 
     try {
@@ -138,6 +145,7 @@ function QueueManagementPage() {
     } catch (error) {
       showToast(error.message, "error");
     } finally {
+      suppressAutoAdvance.current = false;
       setBusy(false);
     }
   };

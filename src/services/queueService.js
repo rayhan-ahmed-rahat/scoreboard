@@ -81,6 +81,7 @@ export async function returnStudentToWaiting(entryId) {
   await updateDoc(doc(db, COLLECTIONS.EVALUATION_QUEUE, entryId), {
     status: "waiting",
     calledAt: null,
+    createdAt: serverTimestamp(), // re-queue at the bottom
   });
 }
 
